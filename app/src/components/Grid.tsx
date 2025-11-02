@@ -1,4 +1,4 @@
-import { Box, Flex } from "@mantine/core";
+import { Box, Flex, type ComboboxData } from "@mantine/core";
 import { AgGridReact } from "ag-grid-react";
 import type { Match } from "../models/match";
 import type {
@@ -8,28 +8,42 @@ import type {
   GridReadyEvent,
   IGetRowsParams,
 } from "ag-grid-community";
-import type { IRestRepository } from "../models/restRepository";
-import { useEffect, useMemo, useRef } from "react";
+import type { IRestRepository, IResult } from "../models/restRepository";
+import { useEffect, useMemo, useRef, useState } from "react";
+import Filter from "./Filter";
+import Search from "./Search";
+
+interface ISearch {
+  title: string;
+  searchFields: string[];
+}
 
 interface IProps<TBase extends Match> {
   columnDefs: ColDef[];
   repository: IRestRepository<TBase>;
+  filterBy?: string;
+  searchBy?: ISearch;
 }
 
 const Grid = <TBase extends Match>({
   columnDefs,
   repository,
+  filterBy,
+  searchBy,
 }: IProps<TBase>) => {
   const gridApiRef = useRef<GridApi<TBase> | null>(null);
   const prevIdsRef = useRef<Set<string>>(new Set());
   const prevAllIdsRef = useRef<Set<string>>(new Set());
   const flashAddRef = useRef<Set<string>>(new Set());
   const flashRemoveRef = useRef<Set<string>>(new Set());
+  const [filterData, setFilterData] = useState<ComboboxData>([]);
+  const selectedFilterValueRef = useRef<string | null>(null);
+  const searchTextRef = useRef<string | null>(null);
 
   useEffect(() => {
     const t = setInterval(
       () => gridApiRef.current?.refreshInfiniteCache(),
-      5000
+      7000
     );
     return () => clearInterval(t);
   }, []);
@@ -49,10 +63,7 @@ const Grid = <TBase extends Match>({
     const prev = prevIdsRef.current;
 
     const added: string[] = [];
-    const removed: string[] = [];
-
     curr.forEach((id) => !prev.has(id) && added.push(id));
-    prev.forEach((id) => !curr.has(id) && removed.push(id));
 
     if (added.length) {
       flashAddRef.current = new Set(added);
@@ -77,6 +88,55 @@ const Grid = <TBase extends Match>({
     );
   }
 
+  const handleFilterData = (result: IResult<TBase>) => {
+    const uniqueValues = [
+      ...new Set(result.matches.map((match) => match[filterBy as keyof Match])),
+    ].sort();
+
+    setFilterData(
+      uniqueValues.map((val) => ({ value: String(val), label: String(val) }))
+    );
+  };
+
+  const handleFilterValueChange = (value: string | null) => {
+    selectedFilterValueRef.current = value;
+    gridApiRef.current?.refreshInfiniteCache();
+  };
+
+  const handleSearchTextChange = (value: string) => {
+    searchTextRef.current = value;
+  };
+
+  const handleSearch = () => {
+    gridApiRef.current?.refreshInfiniteCache();
+  };
+
+  const getFilteredResults = (result: IResult<TBase>): IResult<TBase> => {
+    return {
+      ...result,
+      matches: result.matches.filter(
+        (match) =>
+          match.league.toUpperCase() ===
+          selectedFilterValueRef.current?.toUpperCase()
+      ),
+    };
+  };
+
+  const getSearchResults = (result: IResult<TBase>): IResult<TBase> => {
+    return {
+      ...result,
+      matches: searchTextRef.current
+        ? result.matches.filter(
+            (match) =>
+              match.homeTeam.toUpperCase() ===
+                searchTextRef.current?.toUpperCase() ||
+              match.awayTeam.toUpperCase() ===
+                searchTextRef.current?.toUpperCase()
+          )
+        : result.matches,
+    };
+  };
+
   const gridOptions = useMemo<GridOptions<TBase>>(() => {
     const newDataSource = {
       getRows: async (params: IGetRowsParams) => {
@@ -85,8 +145,16 @@ const Grid = <TBase extends Match>({
           const newIds = new Set(result.matches.map((m) => String(m.id)));
           const prevAllIds = prevAllIdsRef.current;
 
+          filterBy && result.matches.length && handleFilterData(result);
+
           const beingRemoved = Array.from(prevAllIds).filter(
             (id) => !newIds.has(id)
+          );
+
+          const gridResults = getSearchResults(
+            !!selectedFilterValueRef.current
+              ? getFilteredResults(result)
+              : result
           );
 
           if (beingRemoved.length && gridApiRef.current) {
@@ -102,14 +170,20 @@ const Grid = <TBase extends Match>({
             }
 
             setTimeout(() => {
-              params.successCallback(result.matches, result.matches.length);
+              params.successCallback(
+                gridResults.matches,
+                gridResults.matches.length
+              );
               prevAllIdsRef.current = newIds;
               setTimeout(() => {
                 flashRemoveRef.current.clear();
               }, 100);
             }, 2000);
           } else {
-            params.successCallback(result.matches, result.matches.length);
+            params.successCallback(
+              gridResults.matches,
+              gridResults.matches.length
+            );
             prevAllIdsRef.current = newIds;
           }
         } catch (error) {
@@ -143,6 +217,7 @@ const Grid = <TBase extends Match>({
         "flash-added": (p) => flashAddRef.current.has(String(p.data?.id)),
         "flash-removed": (p) => flashRemoveRef.current.has(String(p.data?.id)),
       },
+      overlayNoRowsTemplate: "nothing",
       onGridReady,
       onModelUpdated,
       getRowId: (p) => String(p.data.id),
@@ -150,7 +225,23 @@ const Grid = <TBase extends Match>({
   }, [columnDefs, repository]);
 
   return (
-    <Flex w={"100%"} h={"100%"}>
+    <Flex w={"100%"} h={"100%"} direction={"column"}>
+      <Flex mb={10} gap={10}>
+        {filterBy && (
+          <Filter
+            title={filterBy}
+            data={filterData}
+            onChange={handleFilterValueChange}
+          />
+        )}
+        {searchBy && (
+          <Search
+            title={searchBy.title}
+            onChange={handleSearchTextChange}
+            onSeearch={handleSearch}
+          />
+        )}
+      </Flex>
       <Box className={"ag-theme-quartz"} mt={5} flex={1} h={"100%"}>
         <AgGridReact gridOptions={gridOptions} theme={"legacy"} />
       </Box>

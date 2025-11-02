@@ -7,7 +7,6 @@ import { FULL_DATE_TIME_FORMAT } from "../constants/date";
 
 const MatchesGrid = () => {
   const columnDefs: ColDef[] = [
-    { headerName: "ID", field: "id" },
     { headerName: "Sport", field: "sport" },
     { headerName: "Home Team", field: "homeTeam" },
     { headerName: "Away Team", field: "awayTeam" },
@@ -40,7 +39,12 @@ const MatchesGrid = () => {
 
   return (
     <Flex w="100%" h="100%">
-      <Grid repository={matchService} columnDefs={columnDefs}></Grid>
+      <Grid
+        repository={matchService}
+        columnDefs={columnDefs}
+        filterBy="league"
+        searchBy={{ title: "team", searchFields: ["homeTeam", "awayTeam"] }}
+      ></Grid>
     </Flex>
   );
 };

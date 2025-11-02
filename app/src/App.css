@@ -46,6 +46,10 @@ body {
   background-color: var(--mantine-color-riaGray-12) !important;
 }
 
+.ag-viewport {
+  background-color: var(--mantine-color-riaGray-12) !important;
+}
+
 .ag-header-cell {
   background-color: var(--mantine-color-riaGray-7);
   color: var(--mantine-color-riaGray-1);
@@ -67,9 +71,8 @@ body {
 }
 
 .flash-added {
-  /* border-left: 3px solid #ffd54f; */
   animation: rowPulse 2s ease-in-out;
-  border: 2px solid var(--mantine-color-riaAccent-4) !important;
+  border: 1px solid var(--mantine-color-riaAccent-4) !important;
 }
 
 .flash-removed .ag-row {
@@ -80,6 +83,16 @@ body {
 .flash-removed .ag-cell {
   background-color: var(--mantine-color-riaGray-3) !important;
   color: var(--mantine-color-dark-1) !important;
+}
+
+.mantine-Input-input {
+  background-color: var(--mantine-color-dark-12);
+  border: 1px solid var(--mantine-color-riaAccent-4);
+  color: white;
+}
+
+.mantine-InputWrapper-root {
+  background-color: var(--mantine-color-dark-12) !important;
 }
 
 @keyframes rowPulse {
