@@ -2,6 +2,8 @@ import { Flex } from "@mantine/core";
 import type { ColDef } from "ag-grid-community";
 import matchService from "../services/match";
 import Grid from "./Grid";
+import dayjs from "dayjs";
+import { FULL_DATE_TIME_FORMAT } from "../constants/date";
 
 const MatchesGrid = () => {
   const columnDefs: ColDef[] = [
@@ -12,11 +14,28 @@ const MatchesGrid = () => {
     { headerName: "Home Score", field: "homeScore" },
     { headerName: "Away Score", field: "awayScore" },
     { headerName: "Status", field: "status" },
-    { headerName: "Match Time", field: "matchTime" },
+    {
+      headerName: "Match Time",
+      field: "matchTime",
+      valueFormatter: (params) =>
+        params.value
+          ? dayjs(new Date(params.value).toLocaleString()).format(
+              FULL_DATE_TIME_FORMAT
+            )
+          : "",
+    },
     { headerName: "League", field: "league" },
     { headerName: "Venue", field: "venue" },
-    { headerName: "Source", field: "source" },
-    { headerName: "Last Updated", field: "lastUpdated" },
+    {
+      headerName: "Last Updated",
+      field: "lastUpdated",
+      valueFormatter: (params) =>
+        params.value
+          ? dayjs(new Date(params.value).toLocaleString()).format(
+              FULL_DATE_TIME_FORMAT
+            )
+          : "",
+    },
   ];
 
   return (
