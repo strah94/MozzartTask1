@@ -7,6 +7,13 @@ import { FULL_DATE_TIME_FORMAT } from "../constants/date";
 
 const MatchesGrid = () => {
   const columnDefs: ColDef[] = [
+    {
+      field: "",
+      cellDataType: "boolean",
+      cellRenderer: "checkCellRenderer",
+      maxWidth: 42,
+      type: "checkbox",
+    },
     { headerName: "Sport", field: "sport" },
     { headerName: "Home Team", field: "homeTeam" },
     { headerName: "Away Team", field: "awayTeam" },

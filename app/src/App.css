@@ -65,6 +65,11 @@ body {
   font-weight: 300;
 }
 
+.ag-cell-focus {
+  border: none !important;
+  border-right: 1px solid var(--mantine-color-riaGray-12) !important;
+}
+
 .ag-row {
   font-size: 14px !important;
   border: 1px solid var(--mantine-color-riaGray-12) !important;
@@ -93,6 +98,19 @@ body {
 
 .mantine-InputWrapper-root {
   background-color: var(--mantine-color-dark-12) !important;
+}
+
+.mantine-Checkbox-input {
+  background-color: var(--mantine-color-dark-12) !important;
+  border: none;
+}
+
+.row-checked .ag-cell {
+  color: var(--mantine-color-riaAccent2-4) !important;
+}
+
+.ag-overlay-wrapper {
+  color: var(--mantine-color-riaGray-1) !important;
 }
 
 @keyframes rowPulse {

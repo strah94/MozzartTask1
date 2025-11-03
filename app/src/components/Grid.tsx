@@ -1,4 +1,4 @@
-import { Box, Flex, type ComboboxData } from "@mantine/core";
+import { Box, Checkbox, Flex, Tooltip, type ComboboxData } from "@mantine/core";
 import { AgGridReact } from "ag-grid-react";
 import type { Match } from "../models/match";
 import type {
@@ -9,9 +9,10 @@ import type {
   IGetRowsParams,
 } from "ag-grid-community";
 import type { IRestRepository, IResult } from "../models/restRepository";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Filter from "./Filter";
 import Search from "./Search";
+import type { ICellRendererParams } from "ag-grid";
 
 interface ISearch {
   title: string;
@@ -32,11 +33,13 @@ const Grid = <TBase extends Match>({
   searchBy,
 }: IProps<TBase>) => {
   const gridApiRef = useRef<GridApi<TBase> | null>(null);
-  const prevIdsRef = useRef<Set<string>>(new Set());
+  const prevViewPortIdsRef = useRef<Set<string>>(new Set());
   const prevAllIdsRef = useRef<Set<string>>(new Set());
   const flashAddRef = useRef<Set<string>>(new Set());
   const flashRemoveRef = useRef<Set<string>>(new Set());
   const [filterData, setFilterData] = useState<ComboboxData>([]);
+  const checkedIdsRef = useRef<Set<string>>(new Set());
+  const [checkedIdsTrigger, setCheckedIdsTrigger] = useState(0);
   const selectedFilterValueRef = useRef<string | null>(null);
   const searchTextRef = useRef<string | null>(null);
 
@@ -48,7 +51,7 @@ const Grid = <TBase extends Match>({
     return () => clearInterval(t);
   }, []);
 
-  function collectRenderedIds(api: any): Set<string> {
+  const collectRenderedIds = (api: any): Set<string> => {
     const set = new Set<string>();
     const nodes = api.getRenderedNodes?.() ?? [];
     nodes.forEach((n: any) => {
@@ -56,11 +59,11 @@ const Grid = <TBase extends Match>({
       if (id != null) set.add(String(id));
     });
     return set;
-  }
+  };
 
   const onModelUpdated = (e: any) => {
     const curr = collectRenderedIds(e.api);
-    const prev = prevIdsRef.current;
+    const prev = prevViewPortIdsRef.current;
 
     const added: string[] = [];
     curr.forEach((id) => !prev.has(id) && added.push(id));
@@ -74,19 +77,19 @@ const Grid = <TBase extends Match>({
       }, 1000);
     }
 
-    prevIdsRef.current = curr;
+    prevViewPortIdsRef.current = curr;
   };
 
-  function redrawRows(ids: string[]) {
+  const redrawRows = (ids: string[]) => {
     const rows = getRenderedNodesByIds(gridApiRef.current, ids);
     gridApiRef.current?.redrawRows({ rowNodes: rows });
-  }
+  };
 
-  function getRenderedNodesByIds(api: any, ids: string[]): any[] {
+  const getRenderedNodesByIds = (api: any, ids: string[]): any[] => {
     return (api.getRenderedNodes() ?? []).filter((n: any) =>
       ids.includes(String(n.id ?? n.data?.id))
     );
-  }
+  };
 
   const handleFilterData = (result: IResult<TBase>) => {
     const uniqueValues = [
@@ -103,12 +106,14 @@ const Grid = <TBase extends Match>({
     gridApiRef.current?.refreshInfiniteCache();
   };
 
-  const handleSearchTextChange = (value: string) => {
-    searchTextRef.current = value;
-  };
-
-  const handleSearch = () => {
-    gridApiRef.current?.refreshInfiniteCache();
+  const handleSearch = (value?: string) => {
+    if (value) {
+      searchTextRef.current = value;
+      gridApiRef.current?.refreshInfiniteCache();
+    } else {
+      searchTextRef.current = null;
+      gridApiRef.current?.refreshInfiniteCache();
+    }
   };
 
   const getFilteredResults = (result: IResult<TBase>): IResult<TBase> => {
@@ -137,6 +142,50 @@ const Grid = <TBase extends Match>({
     };
   };
 
+  const checkCellRenderer = useCallback((props: ICellRendererParams) => {
+    const rowId = String(props.data?.id);
+    const isChecked = checkedIdsRef.current.has(rowId);
+
+    return (
+      <Flex align={"center"} justify={"center"} w={"100%"}>
+        <Tooltip label="Favorite">
+          <Checkbox
+            checked={isChecked}
+            onChange={(e) => {
+              if (e.currentTarget.checked) {
+                checkedIdsRef.current.add(rowId);
+              } else {
+                checkedIdsRef.current.delete(rowId);
+              }
+              setCheckedIdsTrigger((prev) => prev + 1);
+              if (props.node) {
+                gridApiRef.current?.refreshCells({
+                  rowNodes: [props.node as any],
+                  force: true,
+                });
+                gridApiRef.current?.redrawRows({
+                  rowNodes: [props.node as any],
+                });
+              }
+            }}
+            w={20}
+            h={20}
+            mt={12}
+            styles={{
+              input: { width: 15, height: 15, cursor: "pointer" },
+            }}
+          />
+        </Tooltip>
+      </Flex>
+    );
+  }, []);
+
+  useEffect(() => {
+    if (!searchTextRef || !selectedFilterValueRef) {
+      gridApiRef.current?.refreshInfiniteCache();
+    }
+  }, [searchTextRef, selectedFilterValueRef]);
+
   const gridOptions = useMemo<GridOptions<TBase>>(() => {
     const newDataSource = {
       getRows: async (params: IGetRowsParams) => {
@@ -156,6 +205,18 @@ const Grid = <TBase extends Match>({
               ? getFilteredResults(result)
               : result
           );
+
+          if (!gridResults.matches.length && gridApiRef.current) {
+            setTimeout(() => {
+              gridApiRef.current?.setGridOption(
+                "overlayNoRowsTemplate",
+                "No data available at the moment."
+              );
+              gridApiRef.current?.showNoRowsOverlay();
+            }, 2000);
+          } else {
+            gridApiRef.current?.hideOverlay();
+          }
 
           if (beingRemoved.length && gridApiRef.current) {
             const nodesToRemove = getRenderedNodesByIds(
@@ -196,7 +257,7 @@ const Grid = <TBase extends Match>({
     const onGridReady = (params: GridReadyEvent) => {
       if (params.api) {
         gridApiRef.current = params.api;
-        prevIdsRef.current = collectRenderedIds(params.api);
+        prevViewPortIdsRef.current = collectRenderedIds(params.api);
       }
       params.api.setGridOption("datasource", newDataSource);
 
@@ -216,13 +277,16 @@ const Grid = <TBase extends Match>({
       rowClassRules: {
         "flash-added": (p) => flashAddRef.current.has(String(p.data?.id)),
         "flash-removed": (p) => flashRemoveRef.current.has(String(p.data?.id)),
+        "row-checked": (p) => checkedIdsRef.current.has(String(p.data?.id)),
       },
-      overlayNoRowsTemplate: "nothing",
+      components: {
+        checkCellRenderer,
+      },
       onGridReady,
       onModelUpdated,
       getRowId: (p) => String(p.data.id),
     };
-  }, [columnDefs, repository]);
+  }, [columnDefs, repository, checkedIdsTrigger]);
 
   return (
     <Flex w={"100%"} h={"100%"} direction={"column"}>
@@ -234,13 +298,7 @@ const Grid = <TBase extends Match>({
             onChange={handleFilterValueChange}
           />
         )}
-        {searchBy && (
-          <Search
-            title={searchBy.title}
-            onChange={handleSearchTextChange}
-            onSeearch={handleSearch}
-          />
-        )}
+        {searchBy && <Search title={searchBy.title} onSearch={handleSearch} />}
       </Flex>
       <Box className={"ag-theme-quartz"} mt={5} flex={1} h={"100%"}>
         <AgGridReact gridOptions={gridOptions} theme={"legacy"} />
